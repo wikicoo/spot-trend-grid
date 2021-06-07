@@ -6,6 +6,12 @@ from app.dingding import Message
 from data.calcIndex import CalcIndex
 import time
 
+import mplfinance as mpf
+import matplotlib as mpl# 用于设置曲线参数
+from cycler import cycler# 用于定制线条颜色
+import pandas as pd# 导入DataFrame数据
+import matplotlib.pyplot as plt
+
 binan = BinanceAPI(api_key,api_secret)
 runbet = RunBetData()
 msg = Message()
@@ -50,16 +56,47 @@ class Run_Main():
             else:
                 print("当前市价：{market_price}。未能满足交易,继续运行".format(market_price = cur_market_price))
 
+    def macdCalc(self):
+        kline = binan.get_klines("DOGEUSDT", "1m", 500)
+        columns = ['开盘时间', 'Open', 'High', 'Low', 'Close', 'volume', '收盘时间',
+                   '成交额', '成交笔数', '主动买入成交量', '主动买入成交额', '请忽略该参数']
+        # df = pd.read_json('data/kline.json')
+        df = pd.read_json(kline)
+        df.columns = columns
+        df['开盘时间'] = pd.to_datetime(df['开盘时间'], unit='ms')
+        df = df.set_index('开盘时间').iloc[-10:, :5]
 
+        # mpf.plot(df, type='candle',mav=(5,10,20))
+
+        # MACD默认参数为12、26、9，计算过程分为三步，
+        # 第一步计算EMA：
+        # 12日EMA
+        # EMA(12) = 2 / (12 + 1) * 今日收盘价(12) + 11 / (12 + 1) * 昨日EMA(12)
+        df['ema12'] = 0
+        df['ema12'] = (2 / (12 + 1) * df['Close']) + (11 / (12 + 1) * df['ema12'].shift(1))
+        a = 2 / (12 + 1) * df['Close']
+        b = 11 / (12 + 1) * df['ema12'].shift(1)
+        df['ema123'] = a + b
+        # 26日EMA
+        # EMA(26) = 2 / (26 + 1) * 今日收盘价(26) + 25 / (26 + 1) * 昨日EMA(26)
+        # 第二步计算DIFF：
+        # DIFF = EMA(12) - EMA(26)
+        # 第三步计算DEA：
+        # DEA = 2 / (9 + 1) * 今日DIFF + 8 / (9 + 1) * 昨日DEA
+        # 第四步计算MACD柱线：
+        # MACD柱线 = 2 * (DIFF - DEA)
+        print(df)
+
+# if __name__ == "__main__":
+#     instance = Run_Main()
+#     try:
+#         instance.loop_run()
+#     except Exception as e:
+#         error_info = "报警：币种{coin},服务停止.错误原因{info}".format(coin=instance.coinType,info=str(e))
+#         msg.dingding_warn(error_info)
+
+# 调试看报错运行下面，正式运行用上面
 if __name__ == "__main__":
     instance = Run_Main()
-    try:
-        instance.loop_run()
-    except Exception as e:
-        error_info = "报警：币种{coin},服务停止.错误原因{info}".format(coin=instance.coinType,info=str(e))
-        msg.dingding_warn(error_info)
-
-# 调试看报错运行下面，正式运行用上面       
-# if __name__ == "__main__":       
-#     instance = Run_Main()    
-#     instance.loop_run()
+    instance.macdCalc()
+    # instance.loop_run()

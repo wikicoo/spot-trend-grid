@@ -18,13 +18,20 @@ class BinanceAPI(object):
     BASE_URL_V3 = "https://api.binance.com/api/v3"
     PUBLIC_URL = "https://www.binance.com/exchange/public/product"
 
+    proxies = {
+        'https': 'https://127.0.0.1:7890',
+        'http': 'http://127.0.0.1:7890'
+    }
+
     def __init__(self, key, secret):
         self.key = key
         self.secret = secret
+        s = requests.Session()
+        s.mount('https://', MyAdapter())
 
     def ping(self):
         path = "%s/ping" % self.BASE_URL_V3
-        return requests.get(path, timeout=180, verify=True).json()
+        return requests.get(path, proxies=self.proxies, timeout=180, verify=True).json()
 
     def get_ticker_price(self,market):
         path = "%s/ticker/price" % self.BASE_URL_V3
@@ -150,7 +157,7 @@ class BinanceAPI(object):
     def _get_no_sign(self, path, params={}):
         query = urlencode(params)
         url = "%s?%s" % (path, query)
-        res = requests.get(url, timeout=180, verify=True).json()
+        res = requests.get(url, proxies=self.proxies, timeout=180, verify=True).json()
         if isinstance(res,dict):
             if 'code' in res:
                 error_info = "报警：币种{coin},请求异常.错误原因{info}".format(coin=self.get_cointype(), info=str(res))
@@ -175,7 +182,7 @@ class BinanceAPI(object):
         query = urlencode(self._sign(params))
         url = "%s" % (path)
         header = {"X-MBX-APIKEY": self.key}
-        res = requests.post(url, headers=header, data=query, \
+        return requests.post(url, proxies=self.proxies, headers=header, data=query, \
             timeout=180, verify=True).json()
 
         if isinstance(res,dict):
@@ -188,8 +195,16 @@ class BinanceAPI(object):
     def _format(self, price):
         return "{:.8f}".format(price)
 
+class MyAdapter(HTTPAdapter):
+    def init_poolmanager(self, connections, maxsize, block=False):
+        self.poolmanager = PoolManager(num_pools=connections,
+                                       maxsize=maxsize,
+                                       block=block,
+                                       ssl_version=ssl.PROTOCOL_TLSv1)
+
 if __name__ == "__main__":
     instance = BinanceAPI(api_key,api_secret)
     # print(instance.buy_limit("EOSUSDT",5,2))
-    # print(instance.get_ticker_price("WINGUSDT"))
-    print(instance.get_ticker_24hour("WINGUSDT"))
+    # print(instance.get_ticker_price("DOGEUSDT"))
+    # print(instance.get_ticker_24hour("WINGUSDT"))
+    print(instance.get_klines("DOGEUSDT","1m",500))
